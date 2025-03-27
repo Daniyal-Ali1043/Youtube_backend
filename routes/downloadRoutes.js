@@ -2,9 +2,12 @@ const express = require("express");
 const { spawn } = require("child_process");
 const Download = require("../models/Download"); // Ensure correct model path
 const Search = require("../models/Search"); // Ensure correct model path
-
+const fs = require("fs");
 const router = express.Router();
 
+const path = require("path");
+
+const cookiesPath = path.join(__dirname, "../www.youtube.com_cookies.txt");
 // ✅ Route: Download Video/Audio and Save to Database
 router.get("/download", async (req, res) => {
   try {
