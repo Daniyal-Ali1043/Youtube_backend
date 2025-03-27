@@ -17,8 +17,8 @@ router.get("/download", async (req, res) => {
     res.flushHeaders(); // Ensure headers are sent
 
     const ytOptions = format === "mp3"
-      ? ["-f", "bestaudio", "--extract-audio", "--audio-format", "mp3", "-o", "-", videoUrl]
-      : ["-f", "bestvideo+bestaudio", "-o", "-", videoUrl];
+      ? ["--cookies", cookiesPath, "-f", "bestaudio", "--extract-audio", "--audio-format", "mp3", "-o", "-", videoUrl]
+      : ["--cookies", cookiesPath, "-f", "bestvideo+bestaudio", "-o", "-", videoUrl];
 
     const ytProcess = spawn("yt-dlp", ytOptions);
 
