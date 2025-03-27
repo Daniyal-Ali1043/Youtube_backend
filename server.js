@@ -46,7 +46,7 @@ const createAdminUser = async () => {
   }
 };
 
-const cookiesPath = path.join(__dirname, "www.youtube.com_cookies.txt");
+const cookiesPath = path.join(__dirname, "www.youtube.com_cookies.json");
 
 console.log("cookies",cookiesPath)
 // ✅ Extract YouTube video ID from URL
