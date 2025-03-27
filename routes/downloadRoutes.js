@@ -15,24 +15,34 @@ router.get("/download", async (req, res) => {
     if (!videoId) return res.status(400).json({ error: "Video ID is required" });
 
     const videoUrl = `https://www.youtube.com/watch?v=${videoId}`;
-    res.setHeader("Content-Disposition", `attachment; filename="video.${format}"`);
-    res.setHeader("Content-Type", format === "mp3" ? "audio/mpeg" : "video/mp4");
-    res.flushHeaders(); // Ensure headers are sent
-
+    
     const ytOptions = format === "mp3"
       ? ["--cookies", cookiesPath, "-f", "bestaudio", "--extract-audio", "--audio-format", "mp3", "-o", "-", videoUrl]
       : ["--cookies", cookiesPath, "-f", "bestvideo+bestaudio", "-o", "-", videoUrl];
 
+    console.log("Executing yt-dlp with options:", ytOptions.join(" "));
+
     const ytProcess = spawn("yt-dlp", ytOptions);
 
-    ytProcess.stdout.pipe(res); // Stream directly to response
-
+    // Handle process errors before writing response
     ytProcess.stderr.on("data", (data) => {
       console.warn("⚠️ yt-dlp Warning:", data.toString());
     });
 
+    ytProcess.on("error", (err) => {
+      console.error("❌ yt-dlp Process Error:", err);
+      if (!res.headersSent) {
+        res.status(500).json({ error: "Internal server error during download" });
+      }
+    });
+
     ytProcess.on("close", async (code) => {
-      if (code === 0) {
+      if (code !== 0) {
+        console.error(`❌ yt-dlp process exited with code ${code}`);
+        if (!res.headersSent) {
+          return res.status(500).json({ error: "Failed to download video/audio" });
+        }
+      } else {
         try {
           const newDownload = new Download({
             title: `Downloaded video (${videoId})`, 
@@ -45,17 +55,24 @@ router.get("/download", async (req, res) => {
         } catch (dbError) {
           console.error("❌ Database Save Error:", dbError);
         }
-      } else {
-        console.error(`❌ yt-dlp process exited with code ${code}`);
-        res.status(500).json({ error: "Failed to download video/audio" });
       }
     });
 
+    // ✅ Start streaming after all error handling is set up
+    res.setHeader("Content-Disposition", `attachment; filename="video.${format}"`);
+    res.setHeader("Content-Type", format === "mp3" ? "audio/mpeg" : "video/mp4");
+    res.flushHeaders();
+
+    ytProcess.stdout.pipe(res); // Stream video/audio to response
+
   } catch (error) {
     console.error("❌ Download Error:", error);
-    res.status(500).json({ error: "Internal server error during download" });
+    if (!res.headersSent) {
+      res.status(500).json({ error: "Internal server error during download" });
+    }
   }
 });
+
 
 // ✅ Route: Total Download Count
 router.get("/download/count", async (req, res) => {
