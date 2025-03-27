@@ -3,9 +3,9 @@ const express = require("express");
 const cors = require("cors");
 const axios = require("axios");
 const { spawn } = require("child_process");
-// const path = require("path");
+const path = require("path");
 const mongoose = require("mongoose");
-// const fs = require("fs");
+const fs = require("fs");
 
 const User = require("./models/User");
 const Download = require("./models/Download");
@@ -46,8 +46,8 @@ const createAdminUser = async () => {
   }
 };
 
-
-
+const cookiesPath = path.join(__dirname, "www.youtube.com_cookies.txt");
+console.log("cookies",cookiesPath)
 // ✅ Extract YouTube video ID from URL
 const extractVideoId = (url) => {
   const match = url.match(/(?:youtu\.be\/|youtube\.com\/(?:.*[?&]v=|embed\/|v\/))([a-zA-Z0-9_-]{11})/);
