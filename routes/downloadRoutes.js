@@ -27,9 +27,15 @@ router.get("/download", async (req, res) => {
 
     const videoUrl = `https://www.youtube.com/watch?v=${videoId}`;
     
-    const ytOptions = format === "mp3"
-      ? ["-f", "bestaudio", "--extract-audio", "--audio-format", "mp3", "-o", "-", videoUrl]
-      : ["-f", "bestvideo+bestaudio", "-o", "-", videoUrl];
+    const ytOptions = [
+      "--cookies-from-browser", "chrome",
+      "-f", "bestvideo+bestaudio",
+      "--merge-output-format", "mp4", // Ensures MP4 output
+      "-o", "-", 
+      videoUrl
+    ];
+    
+  
 
     console.log("Executing yt-dlp with options:", ytOptions.join(" "));
 
