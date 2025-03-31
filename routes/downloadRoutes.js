@@ -5,10 +5,21 @@ const Search = require("../models/Search"); // Ensure correct model path
 const fs = require("fs");
 const router = express.Router();
 
-const path = require("path");
+let downloadProgress = {}; // Store progress per request
 
-const cookiesPath = path.join(__dirname, "../cookies.txt");
-// ✅ Route: Download Video/Audio and Save to Database
+// ✅ Route to Stream Progress Updates to Frontend
+router.get("/progress", (req, res) => {
+  res.setHeader("Content-Type", "text/event-stream");
+  res.setHeader("Cache-Control", "no-cache");
+  res.setHeader("Connection", "keep-alive");
+
+  const interval = setInterval(() => {
+    res.write(`data: ${JSON.stringify(downloadProgress)}\n\n`);
+  }, 1000);
+
+  req.on("close", () => clearInterval(interval)); // Cleanup on client disconnect
+});
+
 router.get("/download", async (req, res) => {
   try {
     const { videoId, format = "mp4" } = req.query;
@@ -17,32 +28,52 @@ router.get("/download", async (req, res) => {
     const videoUrl = `https://www.youtube.com/watch?v=${videoId}`;
     
     const ytOptions = format === "mp3"
-      ? ["--cookies", cookiesPath, "-f", "bestaudio", "--extract-audio", "--audio-format", "mp3", "-o", "-", videoUrl]
-      : ["--cookies", cookiesPath, "-f", "bestvideo+bestaudio", "-o", "-", videoUrl];
+      ? ["-f", "bestaudio", "--extract-audio", "--audio-format", "mp3", "-o", "-", videoUrl]
+      : ["-f", "bestvideo+bestaudio", "-o", "-", videoUrl];
 
     console.log("Executing yt-dlp with options:", ytOptions.join(" "));
 
     const ytProcess = spawn("yt-dlp", ytOptions);
 
-    // Handle process errors before writing response
-    ytProcess.stderr.on("data", (data) => {
-      console.warn("⚠️ yt-dlp Warning:", data.toString());
-    });
+    res.setHeader("Content-Disposition", `attachment; filename="video.${format}"`);
+    res.setHeader("Content-Type", format === "mp3" ? "audio/mpeg" : "video/mp4");
+    res.flushHeaders();
 
-    ytProcess.on("error", (err) => {
-      console.error("❌ yt-dlp Process Error:", err);
-      if (!res.headersSent) {
-        res.status(500).json({ error: "Internal server error during download" });
+    let downloadedSize = 0;
+    let totalSize = 0;
+
+    ytProcess.stderr.on("data", (data) => {
+      const stderrOutput = data.toString();
+
+      const progressMatch = stderrOutput.match(/\[download\]\s+([\d.]+)%/);
+      if (progressMatch) {
+        const percentage = parseFloat(progressMatch[1]);
+        console.log(`⬇️ Download Progress: ${percentage}%`);
+      }
+
+      const sizeMatch = stderrOutput.match(/Total file size:\s([\d.]+)MiB/);
+      if (sizeMatch) {
+        totalSize = parseFloat(sizeMatch[1]) * 1024 * 1024;
       }
     });
+
+    ytProcess.stdout.on("data", (chunk) => {
+      downloadedSize += chunk.length;
+      if (totalSize > 0) {
+        const percentage = ((downloadedSize / totalSize) * 100).toFixed(2);
+        console.log(`📤 Streaming Progress: ${percentage}%`);
+      }
+    });
+
+    ytProcess.stdout.pipe(res);
 
     ytProcess.on("close", async (code) => {
       if (code !== 0) {
         console.error(`❌ yt-dlp process exited with code ${code}`);
-        if (!res.headersSent) {
-          return res.status(500).json({ error: "Failed to download video/audio" });
-        }
+        return res.status(500).json({ error: "Failed to download video/audio" });
       } else {
+        console.log("✅ Download Completed Successfully!");
+
         try {
           const newDownload = new Download({
             title: `Downloaded video (${videoId})`, 
@@ -58,13 +89,6 @@ router.get("/download", async (req, res) => {
       }
     });
 
-    // ✅ Start streaming after all error handling is set up
-    res.setHeader("Content-Disposition", `attachment; filename="video.${format}"`);
-    res.setHeader("Content-Type", format === "mp3" ? "audio/mpeg" : "video/mp4");
-    res.flushHeaders();
-
-    ytProcess.stdout.pipe(res); // Stream video/audio to response
-
   } catch (error) {
     console.error("❌ Download Error:", error);
     if (!res.headersSent) {
@@ -72,7 +96,6 @@ router.get("/download", async (req, res) => {
     }
   }
 });
-
 
 // ✅ Route: Total Download Count
 router.get("/download/count", async (req, res) => {
@@ -133,7 +156,5 @@ router.get("/download/count/quality", async (req, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-
-
 
 module.exports = router;
