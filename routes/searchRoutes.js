@@ -11,7 +11,7 @@ router.get("/search", async (req, res) => {
     if (!query) return res.status(400).json({ error: "Query is required" });
 
     const response = await axios.get("https://www.googleapis.com/youtube/v3/search", {
-      params: { q: query, key: YOUTUBE_API_KEY, part: "snippet", maxResults: 10, type: "video" },
+      params: { q: query, key: YOUTUBE_API_KEY, part: "snippet", maxResults: 200, type: "video" },
     });
 
     const videos = response.data.items?.map((video) => ({
